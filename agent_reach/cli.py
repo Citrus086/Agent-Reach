@@ -1725,16 +1725,44 @@ def _cmd_update(args):
                         capture_output=True, encoding="utf-8", timeout=5
                     )
                     conflict_files = status_result.stdout.strip().split("\n")
+                    conflict_file_list = []
                     for f in conflict_files:
                         if f:
                             print(f"     - {f}")
+                            conflict_file_list.append(f)
                     print()
-                    print("   解决步骤:")
-                    print("   1. 编辑冲突文件，解决 <<<<<<< ======= >>>>>>> 标记")
-                    print("   2. git add <冲突文件>")
-                    print("   3. git commit -m 'resolve merge conflicts'")
+                    print("   ═══════════════════════════════════════════════════════")
+                    print("   解决冲突步骤:")
+                    print("   ═══════════════════════════════════════════════════════")
                     print()
-                    print("   或取消合并: git merge --abort")
+                    print("   1️⃣  查看冲突内容:")
+                    print("       git diff                    # 查看所有冲突")
+                    print("       code .                      # 用 VS Code 打开（推荐）")
+                    print()
+                    print("   2️⃣  编辑冲突文件，解决 <<<<<<< HEAD ======= >>>>>>> 标记")
+                    print("       - 保留你的更改: 删除上游部分")
+                    print("       - 保留上游更改: 删除你的部分")
+                    print("       - 合并两者: 手动整合代码")
+                    print()
+                    print("   3️⃣  标记冲突已解决:")
+                    if conflict_file_list:
+                        for f in conflict_file_list[:3]:
+                            print(f"       git add {f}")
+                        if len(conflict_file_list) > 3:
+                            print(f"       # ... 还有 {len(conflict_file_list) - 3} 个文件")
+                    else:
+                        print("       git add <冲突文件>")
+                    print()
+                    print("   4️⃣  完成合并:")
+                    print("       git commit -m 'resolve merge conflicts'")
+                    print()
+                    print("   5️⃣  重新安装 skill:")
+                    print("       agent-reach install")
+                    print()
+                    print("   ───────────────────────────────────────────────────────")
+                    print("   或者取消本次合并（回到更新前状态）:")
+                    print("       git merge --abort")
+                    print("   ═══════════════════════════════════════════════════════")
                 else:
                     print(f"   [!] 合并失败: {result.stderr}")
                 return
