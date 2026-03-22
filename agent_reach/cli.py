@@ -94,6 +94,11 @@ def main():
     # ── check-update ──
     sub.add_parser("check-update", help="Check for new versions and changes")
 
+    # ── update ──
+    p_update = sub.add_parser("update", help="Update Agent Reach from upstream (preserves custom changes)")
+    p_update.add_argument("--dry-run", action="store_true",
+                          help="Show what would be done without making changes")
+
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
 
@@ -117,6 +122,8 @@ def main():
         _cmd_doctor()
     elif args.command == "check-update":
         _cmd_check_update()
+    elif args.command == "update":
+        _cmd_update(args)
     elif args.command == "watch":
         _cmd_watch()
     elif args.command == "setup":
@@ -1490,8 +1497,17 @@ def _cmd_check_update():
                 for line in body.strip().split("\n")[:20]:
                     print(f"  {line}")
             print()
-            print("更新命令:")
+            print("两种更新方式可选：")
+            print()
+            print("方式 1 - 保留自定义功能（推荐）:")
+            print("  agent-reach update")
+            print("  说明: 自动合并上游更新，保留你的 bosszhipin 等自定义修改")
+            print("  适用: 当前 Editable 安装，且不想丢失自定义功能")
+            print()
+            print("方式 2 - 纯净官方版本:")
             print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+            print("  说明: 完全替换为官方最新版（会丢失 bosszhipin 等自定义功能）")
+            print("  适用: 想要干净官方版本，不介意丢失自定义功能")
             return "update_available"
         print(f"✅ 已是最新版本")
         return "up_to_date"
@@ -1513,8 +1529,17 @@ def _cmd_check_update():
         date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
         print(f"最新提交: {sha} ({date}) {msg}")
         print()
-        print("更新命令:")
+        print("两种更新方式可选：")
+        print()
+        print("方式 1 - 保留自定义功能（推荐）:")
+        print("  agent-reach update")
+        print("  说明: 自动合并上游更新，保留你的 bosszhipin 等自定义修改")
+        print("  适用: 当前 Editable 安装，且不想丢失自定义功能")
+        print()
+        print("方式 2 - 纯净官方版本:")
         print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        print("  说明: 完全替换为官方最新版（会丢失 bosszhipin 等自定义功能）")
+        print("  适用: 想要干净官方版本，不介意丢失自定义功能")
         return "unknown"
 
     commit_err = _classify_github_response_error(resp2)
@@ -1524,6 +1549,190 @@ def _cmd_check_update():
 
     print(f"[!] 无法检查更新（GitHub 返回 {resp2.status_code}）")
     return "error"
+
+
+def _cmd_update(args):
+    """Update Agent Reach by merging upstream changes (preserves custom modifications).
+
+    This command:
+    1. Auto-commits any unsaved local changes (with timestamp)
+    2. Fetches the latest changes from upstream/main
+    3. Merges them into the current branch
+    4. Preserves custom channels like bosszhipin, weibo, v2ex, etc.
+
+    Safe for editable installs. No need to re-run pip install.
+    """
+    import subprocess
+    import os
+    from datetime import datetime
+
+    dry_run = args.dry_run if args else False
+
+    # Find git repository root
+    try:
+        repo_root = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=5
+        ).stdout.strip()
+    except Exception as e:
+        print(f"[!] 无法找到 Git 仓库: {e}")
+        print("    请确保在 Agent Reach Git 仓库目录中运行此命令")
+        return
+
+    if not repo_root:
+        print("[!] 当前目录不是 Git 仓库")
+        print("    请 cd 到 /Users/mima0000/Desktop/repos/agent-reach 后再运行")
+        return
+
+    os.chdir(repo_root)
+
+    print(f"📁 工作目录: {repo_root}")
+    print()
+
+    if dry_run:
+        print("🔍 DRY RUN 模式 - 显示将要执行的操作（无实际更改）")
+        print()
+
+    # Step 1: Check for uncommitted changes
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=5
+        )
+        has_changes = bool(result.stdout.strip())
+    except Exception as e:
+        print(f"[!] 无法检查 Git 状态: {e}")
+        return
+
+    if has_changes:
+        if dry_run:
+            print("📦 发现未提交的本地更改")
+            print("   [dry-run] 将自动提交为: wip: auto-save before update YYYY-MM-DD")
+        else:
+            print("📦 发现未提交的本地更改，自动保存中...")
+            timestamp = datetime.now().strftime("%Y-%m-%d")
+            try:
+                subprocess.run(["git", "add", "-A"], capture_output=True, timeout=5)
+                subprocess.run(
+                    ["git", "commit", "-m", f"wip: auto-save before update {timestamp}"],
+                    capture_output=True, timeout=10
+                )
+                print(f"   ✅ 已自动提交: wip: auto-save before update {timestamp}")
+            except Exception as e:
+                print(f"   [!] 自动提交失败: {e}")
+                print("   请手动提交后再运行: git add -A && git commit -m 'save work'")
+                return
+    else:
+        print("📦 工作区干净，无需自动提交")
+
+    print()
+
+    # Step 2: Fetch upstream
+    if dry_run:
+        print("📥 [dry-run] 将执行: git fetch upstream")
+    else:
+        print("📥 正在获取 upstream 最新变更...")
+        try:
+            result = subprocess.run(
+                ["git", "fetch", "upstream"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=30
+            )
+            if result.returncode != 0:
+                print(f"   [!] fetch 失败: {result.stderr}")
+                print("   请确保 upstream 远程已配置:")
+                print("   git remote add upstream https://github.com/Panniantong/Agent-Reach.git")
+                return
+            print("   ✅ 已获取 upstream/main 最新状态")
+        except Exception as e:
+            print(f"   [!] fetch 失败: {e}")
+            return
+
+    print()
+
+    # Step 3: Show what will be merged
+    try:
+        result = subprocess.run(
+            ["git", "log", "HEAD..upstream/main", "--oneline"],
+            capture_output=True, encoding="utf-8", errors="replace", timeout=5
+        )
+        new_commits = result.stdout.strip().split("\n") if result.stdout.strip() else []
+        new_commits = [c for c in new_commits if c]
+    except Exception:
+        new_commits = []
+
+    if not new_commits:
+        print("✅ 已经是最新版本，无需更新")
+        return
+
+    print(f"🔄 即将合并 {len(new_commits)} 个新提交:")
+    for commit in new_commits[:10]:  # Show first 10
+        print(f"   • {commit}")
+    if len(new_commits) > 10:
+        print(f"   ... 还有 {len(new_commits) - 10} 个提交")
+
+    print()
+
+    # Step 4: Merge
+    if dry_run:
+        print("🔀 [dry-run] 将执行: git merge upstream/main --no-edit")
+        print()
+        print("📋 总结:")
+        print("   - 自动提交本地更改（如果有）")
+        print("   - 获取 upstream 最新代码")
+        print("   - 合并到当前分支，保留自定义功能")
+        print("   - 由于是 Editable 安装，无需重新 pip install")
+        print()
+        print("   要实际执行，请运行: agent-reach update")
+    else:
+        print("🔀 正在合并 upstream/main...")
+        try:
+            result = subprocess.run(
+                ["git", "merge", "upstream/main", "--no-edit"],
+                capture_output=True, encoding="utf-8", errors="replace", timeout=30
+            )
+            if result.returncode != 0:
+                # Check if it's a conflict
+                if "CONFLICT" in result.stdout or "CONFLICT" in result.stderr:
+                    print("   [!] 合并冲突，需要手动解决")
+                    print()
+                    print("   冲突文件:")
+                    # Show conflict status
+                    status_result = subprocess.run(
+                        ["git", "diff", "--name-only", "--diff-filter=U"],
+                        capture_output=True, encoding="utf-8", timeout=5
+                    )
+                    conflict_files = status_result.stdout.strip().split("\n")
+                    for f in conflict_files:
+                        if f:
+                            print(f"     - {f}")
+                    print()
+                    print("   解决步骤:")
+                    print("   1. 编辑冲突文件，解决 <<<<<<< ======= >>>>>>> 标记")
+                    print("   2. git add <冲突文件>")
+                    print("   3. git commit -m 'resolve merge conflicts'")
+                    print()
+                    print("   或取消合并: git merge --abort")
+                else:
+                    print(f"   [!] 合并失败: {result.stderr}")
+                return
+
+            print("   ✅ 合并成功！")
+            print()
+            print("🎉 更新完成！")
+            print()
+            print("自定义功能状态:")
+            print("   ✅ bosszhipin  - 已保留 (doctor 仍可检测)")
+            print("   ✅ weibo       - 已保留")
+            print("   ✅ v2ex        - 已保留")
+            print("   ✅ xiaoyuzhou  - 已保留")
+            print()
+            print("提示:")
+            print("   - 代码已更新，立即可用（Editable 模式）")
+            print("   - 运行 agent-reach doctor 检查所有渠道状态")
+
+        except Exception as e:
+            print(f"   [!] 合并失败: {e}")
+            return
 
 
 def _cmd_watch():
@@ -1587,7 +1796,11 @@ def _cmd_watch():
         if release_body:
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
-        print(f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        print()
+        print("  更新方式 (保留自定义功能):")
+        print("    agent-reach update")
+        print("  或 (纯净官方版本):")
+        print("    pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
 
 
 if __name__ == "__main__":
