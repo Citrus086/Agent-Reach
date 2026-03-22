@@ -2,15 +2,16 @@
 name: agent-reach
 description: >
   Give your AI agent eyes to see the entire internet.
-  Search and read 16 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
+  Search and read 17 platforms: Twitter/X, Reddit, YouTube, GitHub, Bilibili,
   XiaoHongShu, Douyin, Weibo, WeChat Articles, Xiaoyuzhou Podcast, LinkedIn,
-  Instagram, V2EX, RSS, Exa web search, and any web page.
+  Boss直聘, V2EX, RSS, Exa web search, and any web page.
   Zero config for 8 channels. Use when user asks to search, read, or interact
   on any supported platform, shares a URL, or asks to search the web.
   Triggers: "搜推特", "搜小红书", "看视频", "搜一下", "上网搜", "帮我查",
   "search twitter", "youtube transcript", "search reddit", "read this link",
   "B站", "bilibili", "抖音视频", "微信文章", "公众号", "微博", "V2EX",
-  "小宇宙", "播客", "podcast", "web search", "research", "帮我安装".
+  "小宇宙", "播客", "podcast", "LinkedIn", "Boss直聘", "招聘", "找工作",
+  "web search", "research", "帮我安装".
 metadata:
   openclaw:
     homepage: https://github.com/Panniantong/Agent-Reach
@@ -18,7 +19,7 @@ metadata:
 
 # Agent Reach — Usage Guide
 
-Upstream tools for 13+ platforms. Call them directly.
+Upstream tools for 17 platforms. Call them directly.
 
 Run `agent-reach doctor` to check which channels are available.
 
@@ -133,10 +134,10 @@ cd ~/.agent-reach/tools/wechat-article-for-ai && python3 main.py "https://mp.wei
 ~/.agent-reach/tools/xiaoyuzhou/transcribe.sh "https://www.xiaoyuzhoufm.com/episode/EPISODE_ID"
 ```
 
-> 需要 ffmpeg + Groq API Key（免费）。  
-> 配置 Key：`agent-reach configure groq-key YOUR_KEY`  
-> 首次运行需安装工具：`agent-reach install --env=auto`  
-> 运行 `agent-reach doctor` 检查状态。  
+> 需要 ffmpeg + Groq API Key（免费）。
+> 配置 Key：`agent-reach configure groq-key YOUR_KEY`
+> 首次运行需安装工具：`agent-reach install --env=auto`
+> 运行 `agent-reach doctor` 检查状态。
 > 输出 Markdown 文件默认保存到 `/tmp/`。
 
 
@@ -148,6 +149,86 @@ mcporter call 'linkedin.search_people(keyword: "AI engineer", limit: 10)'
 ```
 
 Fallback: `curl -s "https://r.jina.ai/https://linkedin.com/in/username"`
+
+## Boss直聘 (mcporter)
+
+**用途**：招聘/求职相关操作，获取推荐候选人、发送问候等。
+**状态**：需要本地 MCP 服务器运行（http://localhost:8000）
+**检测**：运行 `agent-reach doctor` 查看 Boss直聘 状态
+
+### 启动服务器
+
+服务器源码位置：`/Users/mima0000/Desktop/repos/mcp-workspace/mcp-servers/bosszhipin/`
+
+```bash
+# 方式 1：直接启动
+cd /Users/mima0000/Desktop/repos/mcp-workspace/mcp-servers/bosszhipin
+python boss_zhipin_fastmcp_v2.py
+
+# 方式 2：Docker 启动（推荐）
+cd /Users/mima0000/Desktop/repos/mcp-workspace/mcp-servers/bosszhipin
+docker-compose up -d
+
+# 方式 3：后台常驻
+nohup python boss_zhipin_fastmcp_v2.py > boss_mcp.log 2>&1 &
+```
+
+### 环境变量（可选但推荐）
+
+```bash
+# 连接本地 Chrome CDP（绕过风控）
+export BOSS_CHROME_CDP_URL="http://localhost:9222"
+
+# 登录态持久化路径
+export BOSS_STATE_PATH="/Users/mima0000/Desktop/repos/mcp-workspace/mcp-servers/bosszhipin/data/state.json"
+
+# 使用持久化浏览器 Profile
+export BOSS_USE_PERSISTENT_CONTEXT="true"
+export BOSS_USER_DATA_DIR="/Users/mima0000/Desktop/repos/mcp-workspace/mcp-servers/bosszhipin/data/browser_profile"
+```
+
+### 启动 Chrome CDP（推荐）
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome_dev_profile
+```
+
+### MCP 调用方式
+
+确保服务器在 `http://localhost:8000` 运行，然后：
+
+```bash
+# 检查登录状态
+mcporter call 'bosszhipin.get_login_info_tool()' --output json
+
+# 全自动登录（二维码+验证）
+mcporter call 'bosszhipin.login_full_auto()' --output json
+
+# 获取推荐候选人
+cporter call 'bosszhipin.get_recommend_jobs_tool(page: 1)' --output json
+
+# 向候选人发送问候
+mcporter call 'bosszhipin.send_greeting_tool(candidate_id: "xxx", message: "您好...")' --output json
+```
+
+### 使用场景
+
+| 用户请求 | 操作 |
+|---------|------|
+| "帮我启动 Boss 直聘" | 启动服务器：`python boss_zhipin_fastmcp_v2.py` |
+| "看看有没有推荐的候选人" | `mcporter call 'bosszhipin.get_recommend_jobs_tool(page: 1)'` |
+| "给这个候选人发个问候" | `mcporter call 'bosszhipin.send_greeting_tool(...)'` |
+
+### 故障排除
+
+| 问题 | 解决方案 |
+|------|---------|
+| 连接失败 | 确认服务器已启动：`curl http://localhost:8000` |
+| 登录超时 | 检查 Chrome CDP 是否正常启动 |
+| Cookie 过期 | 重新执行 `bosszhipin.login_full_auto` |
+
 
 ## V2EX (public API)
 
@@ -210,8 +291,6 @@ print(result[0]["error"])  # 提示使用站内搜索或 Exa channel
 
 ## RSS (feedparser)
 
-## RSS
-
 ```python
 python3 -c "
 import feedparser
@@ -224,6 +303,7 @@ for e in feedparser.parse('FEED_URL').entries[:5]:
 
 - **Channel not working?** Run `agent-reach doctor` — shows status and fix instructions.
 - **Twitter fetch failed?** Ensure `undici` is installed: `npm install -g undici`. Configure proxy: `agent-reach configure proxy URL`.
+- **Boss直聘 not available?** Check if local MCP server is running: `curl http://localhost:8000`
 
 ## Setting Up a Channel ("帮我配 XXX")
 
