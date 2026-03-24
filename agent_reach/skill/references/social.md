@@ -1,6 +1,6 @@
 # 社交媒体 & 社区
 
-小红书、抖音、Twitter/X、微博、B站、V2EX、Reddit。
+小红书、抖音、Twitter/X、微博、B站、V2EX、Reddit、雪球。
 
 ## 小红书 / XiaoHongShu
 
@@ -35,24 +35,24 @@ mcporter call 'douyin.extract_douyin_text(share_link: "https://v.douyin.com/xxx/
 
 > **无需登录**
 
-## Twitter/X (xreach CLI)
+## Twitter/X (bird CLI)
 
 ```bash
 # 搜索推文
-xreach search "query" -n 10 --json
+bird search "query" -n 10 --json
 
-# 读取单条推文 (支持 /status/ 和 /article/ URL)
-xreach tweet URL_OR_ID --json
+# 读取单条推文
+bird read TWEET_ID --json
 
 # 用户时间线
-xreach tweets @username -n 20 --json
+bird user-tweets USERNAME -n 20 --json
 
 # 读取完整 thread
-xreach thread URL_OR_ID --json
+bird thread TWEET_ID --json
 ```
 
-> **需要配置**: `agent-reach configure twitter-auth ...` 或通过环境变量配置。
-> 如果 fetch 失败，确保安装了 undici: `npm install -g undici`
+> **需要配置**: `agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy"`
+> 安装: `npm install -g @steipete/bird`
 
 ## 微博 / Weibo
 
@@ -147,3 +147,47 @@ curl -s "https://www.reddit.com/search.json?q=QUERY&limit=10" -H "User-Agent: ag
 ```
 
 > **注意**: 服务器 IP 可能遇到 403 错误。搜索建议使用 Exa 代替，或配置代理。
+
+## 雪球 / Xueqiu (股票行情)
+
+```bash
+# 股票实时行情 (A/港股/美股)
+mcporter call 'xueqiu.get_stock_quote(symbol: "SH600519")'
+
+# 搜索股票
+mcporter call 'xueqiu.search_stock(query: "茅台")'
+
+# 热门帖子
+mcporter call 'xueqiu.get_hot_posts(limit: 10)'
+
+# 热门股票榜 (stock_type: 10=人气榜, 12=关注榜)
+mcporter call 'xueqiu.get_hot_stocks(limit: 10, stock_type: 10)'
+```
+
+```python
+from agent_reach.channels.xueqiu import XueqiuChannel
+
+ch = XueqiuChannel()
+
+# 获取股票行情
+# 符号格式: SH600519 沪市, SZ000858 深市, AAPL 美股, 00700 港股
+quote = ch.get_stock_quote("SH600519")
+print(f"{quote['name']} ({quote['symbol']}): {quote['current']} ({quote['percent']}%)")
+
+# 搜索股票
+stocks = ch.search_stock("茅台", limit=5)
+for s in stocks:
+    print(f"{s['name']} ({s['symbol']}) - {s['exchange']}")
+
+# 热门帖子
+posts = ch.get_hot_posts(limit=10)
+for p in posts:
+    print(f"{p['author']}: {p['text'][:50]}... ({p['likes']} 赞)")
+
+# 热门股票
+hot = ch.get_hot_stocks(limit=10, stock_type=10)
+for s in hot:
+    print(f"#{s['rank']} {s['name']} ({s['symbol']}): {s['current']} ({s['percent']}%)")
+```
+
+> **零配置** — 无需登录，自动生成 session cookies。

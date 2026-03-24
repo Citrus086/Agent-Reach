@@ -2,11 +2,11 @@
 name: agent-reach
 description: >
   Give your AI agent eyes to see the entire internet.
-  17 platforms via CLI, MCP, curl, and Python scripts.
-  Zero config for 8 channels.
+  18 platforms via CLI, MCP, curl, and Python scripts.
+  Zero config for 9 channels.
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit) / career(LinkedIn/Boss直聘) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客).
+  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit/雪球) / career(LinkedIn/Boss直聘) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客).
 
   Use when user asks to search, read, or interact on any supported platform,
   shares a URL, or asks to search the web.
@@ -20,6 +20,7 @@ triggers:
     - B站: bilibili/b站/哔哩哔哩
     - V2EX: v2ex
     - Reddit: reddit
+    - 雪球: xueqiu/雪球/股票/stock
   - career: 招聘/职位/求职/linkedin/领英/boss直聘/找工作/候选人
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
   - web: 网页/链接/文章/公众号/微信文章/rss/读一下/打开这个
@@ -31,14 +32,14 @@ metadata:
 
 # Agent Reach — 路由器
 
-17 平台工具集合。根据用户意图选择对应分类。
+18 平台工具集合。根据用户意图选择对应分类。
 
 ## 路由表
 
 | 用户意图 | 分类 | 详细文档 |
 |---------|------|---------|
 | 网页搜索/代码搜索 | search | [references/search.md](references/search.md) |
-| 小红书/抖音/微博/推特/B站/V2EX/Reddit | social | [references/social.md](references/social.md) |
+| 小红书/抖音/微博/推特/B站/V2EX/Reddit/雪球 | social | [references/social.md](references/social.md) |
 | 招聘/职位/LinkedIn | career | [references/career.md](references/career.md) |
 | GitHub/代码 | dev | [references/dev.md](references/dev.md) |
 | 网页/文章/公众号/RSS | web | [references/web.md](references/web.md) |
@@ -56,14 +57,19 @@ curl -s "https://r.jina.ai/URL"
 # GitHub 搜索
 gh search repos "query" --sort stars --limit 10
 
-# Twitter 搜索
-xreach search "query" -n 10 --json
+# Twitter 搜索 (bird CLI)
+bird search "query" -n 10 --json
+bird read TWEET_ID --json
+bird user-tweets USERNAME --json
 
 # YouTube/B站字幕
 yt-dlp --write-sub --skip-download -o "/tmp/%(id)s" "URL"
 
 # V2EX 热门
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
+
+# 雪球股票行情
+mcporter call 'xueqiu.get_stock_quote(symbol: "SH600519")'
 ```
 
 ## 环境检查
@@ -85,7 +91,7 @@ mcporter_list_servers()
 根据用户需求，阅读对应的详细文档：
 
 - [搜索工具](references/search.md) — Exa AI 搜索
-- [社交媒体](references/social.md) — 小红书, 抖音, Twitter, B站, V2EX, Reddit
+- [社交媒体](references/social.md) — 小红书, 抖音, Twitter, B站, V2EX, Reddit, 雪球
 - [职场招聘](references/career.md) — Boss直聘, LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, 微信公众号, RSS

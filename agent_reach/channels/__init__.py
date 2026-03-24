@@ -23,6 +23,7 @@ from .weibo import WeiboChannel
 from .xiaoyuzhou import XiaoyuzhouChannel
 from .v2ex import V2EXChannel
 from .bosszhipin import BossZhipinChannel
+from .xueqiu import XueqiuChannel
 
 
 
@@ -40,6 +41,7 @@ ALL_CHANNELS: List[Channel] = [
     XiaoyuzhouChannel(),
     V2EXChannel(),
     BossZhipinChannel(),
+    XueqiuChannel(),
     RSSChannel(),
     ExaSearchChannel(),
     WebChannel(),

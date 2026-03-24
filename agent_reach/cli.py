@@ -310,12 +310,21 @@ def _install_skill():
             print(f"  Warning: Could not install skill: {e}")
             return False
 
-    # Determine skill install path (priority: .agents > openclaw > claude)
+    # Determine skill install path
+    # Priority 1: OPENCLAW_HOME environment variable (if set)
+    # Priority 2: ~/.agents/skills (Generic agents)
+    # Priority 3: ~/.openclaw/skills (OpenClaw default)
+    # Priority 4: ~/.claude/skills (Claude Code)
     skill_dirs = [
-        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
+        os.path.expanduser("~/.agents/skills"),      # Generic agents
         os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
+        os.path.expanduser("~/.claude/skills"),      # Claude Code
     ]
+
+    # Insert OPENCLAW_HOME path at the beginning if environment variable is set
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    if openclaw_home:
+        skill_dirs.insert(0, os.path.join(openclaw_home, ".openclaw", "skills"))
 
     installed = False
     for skill_dir in skill_dirs:
@@ -934,21 +943,7 @@ def _cmd_configure(args):
         # Accept two formats:
         # 1. auth_token ct0 (two separate values)
         # 2. Full cookie header string: "auth_token=xxx; ct0=yyy; ..."
-        auth_token = None
-        ct0 = None
-
-        if "auth_token=" in value and "ct0=" in value:
-            # Full cookie string — parse it
-            for part in value.replace(";", " ").split():
-                if part.startswith("auth_token="):
-                    auth_token = part.split("=", 1)[1]
-                elif part.startswith("ct0="):
-                    ct0 = part.split("=", 1)[1]
-        elif len(value.split()) == 2 and "=" not in value:
-            # Two separate values: AUTH_TOKEN CT0
-            parts = value.split()
-            auth_token = parts[0]
-            ct0 = parts[1]
+        auth_token, ct0 = _parse_twitter_cookie_input(value)
 
         if auth_token and ct0:
             config.set("twitter_auth_token", auth_token)
@@ -1017,6 +1012,27 @@ def _cmd_configure(args):
     elif args.key == "groq-key":
         config.set("groq_api_key", value)
         print(f"✅ Groq key configured!")
+
+
+def _parse_twitter_cookie_input(value: str):
+    """Parse Twitter cookie input from either separate values or a cookie header."""
+    auth_token = None
+    ct0 = None
+
+    if "auth_token=" in value and "ct0=" in value:
+        # Full cookie string — parse it.
+        for part in value.replace(";", " ").split():
+            if part.startswith("auth_token="):
+                auth_token = part.split("=", 1)[1]
+            elif part.startswith("ct0="):
+                ct0 = part.split("=", 1)[1]
+    elif len(value.split()) == 2 and "=" not in value:
+        # Two separate values: AUTH_TOKEN CT0.
+        parts = value.split()
+        auth_token = parts[0]
+        ct0 = parts[1]
+
+    return auth_token, ct0
 
 
 def _configure_xhs_cookies(value):

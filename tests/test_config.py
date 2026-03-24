@@ -66,7 +66,11 @@ class TestConfig:
         tmp_config.set("reddit_proxy", "http://user:pass@ip:port")
         assert tmp_config.is_configured("reddit_proxy")
 
-    def test_get_configured_features(self, tmp_config):
+    def test_get_configured_features(self, tmp_config, monkeypatch):
+        # Clear any environment variables that might affect the test
+        for key in ["EXA_API_KEY", "REDDIT_PROXY", "TWITTER_AUTH_TOKEN", "TWITTER_CT0", "GROQ_API_KEY", "GITHUB_TOKEN"]:
+            monkeypatch.delenv(key, raising=False)
+
         features = tmp_config.get_configured_features()
         assert isinstance(features, dict)
         assert "exa_search" in features
