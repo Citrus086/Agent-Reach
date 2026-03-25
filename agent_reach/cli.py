@@ -84,6 +84,10 @@ def main():
     # ── doctor ──
     sub.add_parser("doctor", help="Check platform availability")
 
+    # ── format ──
+    p_format = sub.add_parser("format", help="Clean and format platform API output")
+    p_format.add_argument("platform", choices=["xhs"], help="Platform to format (xhs)")
+
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
     p_uninstall.add_argument("--dry-run", action="store_true",
@@ -134,6 +138,8 @@ def main():
         _cmd_configure(args)
     elif args.command == "uninstall":
         _cmd_uninstall(args)
+    elif args.command == "format":
+        _cmd_format(args)
 
 
 # ── Command handlers ────────────────────────────────
@@ -1312,9 +1318,38 @@ def _cmd_uninstall(args):
 def _cmd_doctor():
     from agent_reach.config import Config
     from agent_reach.doctor import check_all, format_report
+    try:
+        from rich import print as rprint
+    except ImportError:
+        rprint = print
     config = Config()
     results = check_all(config)
-    print(format_report(results))
+    rprint(format_report(results))
+
+    # Auto-register skill if not already present (fixes #154)
+    _install_skill()
+
+
+def _cmd_format(args):
+    """Clean and format platform API output from stdin."""
+    import json
+    import sys
+
+    if args.platform == "xhs":
+        from agent_reach.channels.xiaohongshu import format_xhs_result
+
+        raw = sys.stdin.read().strip()
+        if not raw:
+            print("Error: no input on stdin", file=sys.stderr)
+            sys.exit(1)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"Error: invalid JSON: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        cleaned = format_xhs_result(data)
+        print(json.dumps(cleaned, ensure_ascii=False, indent=2))
 
 
 def _cmd_setup():
