@@ -95,6 +95,14 @@ def main():
     p_uninstall.add_argument("--keep-config", action="store_true",
                              help="Remove skill files only, keep ~/.agent-reach/ config and tokens")
 
+    # ── skill ──
+    p_skill = sub.add_parser("skill", help="Manage agent skill registration")
+    p_skill_group = p_skill.add_mutually_exclusive_group(required=True)
+    p_skill_group.add_argument("--install", action="store_true",
+                               help="Install SKILL.md to agent skill directories")
+    p_skill_group.add_argument("--uninstall", action="store_true",
+                               help="Remove SKILL.md from agent skill directories")
+
     # ── check-update ──
     sub.add_parser("check-update", help="Check for new versions and changes")
 
@@ -138,6 +146,8 @@ def main():
         _cmd_configure(args)
     elif args.command == "uninstall":
         _cmd_uninstall(args)
+    elif args.command == "skill":
+        _cmd_skill(args)
     elif args.command == "format":
         _cmd_format(args)
 
@@ -1328,6 +1338,14 @@ def _cmd_doctor():
 
     # Auto-register skill if not already present (fixes #154)
     _install_skill()
+
+
+def _cmd_skill(args):
+    """Manage agent skill registration."""
+    if args.install:
+        _install_skill()
+    elif args.uninstall:
+        _uninstall_skill()
 
 
 def _cmd_format(args):

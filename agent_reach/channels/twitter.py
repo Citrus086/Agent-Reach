@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Twitter/X — check if bird CLI is available."""
+"""Twitter/X — check if bird CLI (@steipete/bird) is available."""
 
 import shutil
 import subprocess
@@ -27,12 +27,23 @@ class TwitterChannel(Channel):
 
         try:
             r = subprocess.run(
-                [bird, "whoami"], capture_output=True, text=True, timeout=10
+                [bird, "check"], capture_output=True,
+                encoding="utf-8", errors="replace", timeout=10
             )
+            output = (r.stdout or "") + (r.stderr or "")
             if r.returncode == 0:
-                return "ok", "完整可用（读取、搜索推文）"
+                return "ok", "完整可用（读取、搜索推文，含长文/X Article）"
+            # bird check returns 1 when auth is missing
+            if "Missing credentials" in output or "missing" in output.lower():
+                return "warn", (
+                    "bird CLI 已安装但未配置认证。设置环境变量：\n"
+                    "  export AUTH_TOKEN=\"xxx\"\n"
+                    "  export CT0=\"yyy\"\n"
+                    "或运行：\n"
+                    "  agent-reach configure twitter-cookies \"auth_token=xxx; ct0=yyy\""
+                )
             return "warn", (
-                "bird CLI 已安装但未配置 Cookie。运行：\n"
+                "bird CLI 已安装但认证检查失败。运行：\n"
                 "  agent-reach configure twitter-cookies \"auth_token=xxx; ct0=yyy\""
             )
         except Exception:

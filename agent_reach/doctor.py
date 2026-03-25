@@ -78,22 +78,26 @@ def format_report(results: Dict[str, dict]) -> str:
                 lines.append(f"  [dim]--[/dim]  {name_msg}")
 
     lines.append("")
-    lines.append(f"[bold]状态：[/bold]{ok_count}/{total} 个渠道可用")
+    status_color = "green" if ok_count == total else ("yellow" if ok_count > 0 else "red")
+    lines.append(f"状态：[{status_color}]{ok_count}/{total}[/{status_color}] 个渠道可用")
     if ok_count < total:
-        lines.append("运行 [bold]agent-reach setup[/bold] 解锁更多渠道")
+        lines.append("运行 [cyan]`agent-reach setup`[/cyan] 解锁更多渠道")
 
     # Security check: config file permissions (Unix only)
     import os
     import stat
     import sys
+
     config_path = Config.CONFIG_DIR / "config.yaml"
     if config_path.exists() and sys.platform != "win32":
         try:
             mode = config_path.stat().st_mode
             if mode & (stat.S_IRGRP | stat.S_IROTH):
                 lines.append("")
-                lines.append("[yellow][!][/yellow]  [bold]安全提示：[/bold]config.yaml 权限过宽（其他用户可读）")
-                lines.append("   修复：[bold]chmod 600 ~/.agent-reach/config.yaml[/bold]")
+                lines.append(
+                    "[bold red][!]  安全提示：config.yaml 权限过宽（其他用户可读）[/bold red]"
+                )
+                lines.append("   修复：chmod 600 ~/.agent-reach/config.yaml")
         except OSError:
             pass
 
