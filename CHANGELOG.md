@@ -41,23 +41,15 @@ All notable changes to this project will be documented in this file.
 - 通过 MCP 搜索人才和职位，Exa 兜底
 - 未配置 MCP 时自动 fallback 到 Jina Reader
 
-#### 🏢 Boss直聘
-- QR code login via [mcp-bosszp](https://github.com/mucsbr/mcp-bosszp)
-- Job search and recruiter greeting via MCP
-- Fallback to Jina Reader for reading job pages
-- 通过 mcp-bosszp 扫码登录
-- MCP 搜索职位、向 HR 打招呼
-- Jina Reader 兜底读取职位页面
-
 ### 📈 Improvements / 改进
 
-- Channel count: 9 → 12
-- `agent-reach doctor` now detects all 12 channels
-- CLI: added `search-linkedin`, `search-bosszhipin` subcommands
+- Channel count: 9 → 11
+- `agent-reach doctor` now detects all 11 channels
+- CLI: added `search-linkedin` subcommand
 - Updated install guide with setup instructions for new channels
 - 渠道数量：9 → 11
 - `agent-reach doctor` 现在检测全部 11 个渠道
-- CLI：新增 `search-linkedin`、`search-bosszhipin` 子命令
+- CLI：新增 `search-linkedin` 子命令
 - 安装指南新增渠道配置说明
 
 ---

@@ -1540,12 +1540,12 @@ def _cmd_check_update():
             print()
             print("方式 1 - 保留自定义功能（推荐）:")
             print("  agent-reach update")
-            print("  说明: 自动合并上游更新，保留你的 bosszhipin 等自定义修改")
+            print("  说明: 自动合并上游更新，保留你的自定义修改")
             print("  适用: 当前 Editable 安装，且不想丢失自定义功能")
             print()
             print("方式 2 - 纯净官方版本:")
             print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
-            print("  说明: 完全替换为官方最新版（会丢失 bosszhipin 等自定义功能）")
+            print("  说明: 完全替换为官方最新版（会丢失自定义功能）")
             print("  适用: 想要干净官方版本，不介意丢失自定义功能")
             return "update_available"
         print(f"✅ 已是最新版本")
@@ -1572,12 +1572,12 @@ def _cmd_check_update():
         print()
         print("方式 1 - 保留自定义功能（推荐）:")
         print("  agent-reach update")
-        print("  说明: 自动合并上游更新，保留你的 bosszhipin 等自定义修改")
+        print("  说明: 自动合并上游更新，保留你的自定义修改")
         print("  适用: 当前 Editable 安装，且不想丢失自定义功能")
         print()
         print("方式 2 - 纯净官方版本:")
         print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
-        print("  说明: 完全替换为官方最新版（会丢失 bosszhipin 等自定义功能）")
+        print("  说明: 完全替换为官方最新版（会丢失自定义功能）")
         print("  适用: 想要干净官方版本，不介意丢失自定义功能")
         return "unknown"
 
@@ -1597,7 +1597,7 @@ def _cmd_update(args):
     1. Auto-commits any unsaved local changes (with timestamp)
     2. Fetches the latest changes from upstream/main
     3. Merges them into the current branch
-    4. Preserves custom channels like bosszhipin, weibo, v2ex, etc.
+    4. Preserves custom channels like weibo, v2ex, etc.
 
     Safe for editable installs. No need to re-run pip install.
     """
@@ -1788,7 +1788,6 @@ def _cmd_update(args):
             print("🎉 更新完成！")
             print()
             print("自定义功能状态:")
-            print("   ✅ bosszhipin  - 已保留 (doctor 仍可检测)")
             print("   ✅ weibo       - 已保留")
             print("   ✅ v2ex        - 已保留")
             print("   ✅ xiaoyuzhou  - 已保留")

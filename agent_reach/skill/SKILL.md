@@ -6,7 +6,7 @@ description: >
   Zero config for 9 channels.
 
   【路由方式】SKILL.md 包含路由表和常用命令，复杂场景需按需阅读对应分类的 references/*.md。
-  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit/雪球) / career(LinkedIn/Boss直聘) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客).
+  分类：search / social (小红书/抖音/微博/推特/B站/V2EX/Reddit/雪球) / career(LinkedIn) / dev(github) / web(网页/文章/公众号/RSS) / video(YouTube/B站/播客).
 
   Use when user asks to search, read, or interact on any supported platform,
   shares a URL, or asks to search the web.
@@ -21,7 +21,7 @@ triggers:
     - V2EX: v2ex
     - Reddit: reddit
     - 雪球: xueqiu/雪球/股票/stock
-  - career: 招聘/职位/求职/linkedin/领英/boss直聘/找工作/候选人
+  - career: 招聘/职位/求职/linkedin/领英/找工作/候选人
   - dev: github/代码/仓库/gh/issue/pr/分支/commit
   - web: 网页/链接/文章/公众号/微信文章/rss/读一下/打开这个
   - video: youtube/视频/播客/字幕/小宇宙/转录/yt
@@ -92,7 +92,7 @@ mcporter_list_servers()
 
 - [搜索工具](references/search.md) — Exa AI 搜索
 - [社交媒体](references/social.md) — 小红书, 抖音, Twitter, B站, V2EX, Reddit, 雪球
-- [职场招聘](references/career.md) — Boss直聘, LinkedIn
+- [职场招聘](references/career.md) — LinkedIn
 - [开发工具](references/dev.md) — GitHub CLI
 - [网页阅读](references/web.md) — Jina Reader, 微信公众号, RSS
 - [视频播客](references/video.md) — YouTube, B站, 小宇宙

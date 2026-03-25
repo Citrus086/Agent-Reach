@@ -3,10 +3,9 @@
 ## 关于本分支的自定义更新
 
 > ⚠️ **注意**：这是 `Citrus086/Agent-Reach` 的自定义分支，在官方版本基础上增加了以下功能：
-> 
-> - ✅ **保留 Boss直聘检测** - 官方已移除，本分支保留 `bosszhipin` doctor 检测
-> - ✅ **新增 `agent-reach update` 命令** - 自动合并上游更新，保留自定义功能
-> - ✅ **完整渠道支持** - 微博、V2EX、小宇宙播客等全部 16 个渠道
+>
+> - ✅ **新增 `agent-reach update` 命令** - 自动合并上游更新
+> - ✅ **完整渠道支持** - 微博、V2EX、小宇宙播客等全部 15 个渠道
 
 ### 两种更新方式
 
@@ -19,7 +18,7 @@ agent-reach update
 此命令会：
 1. 自动提交未保存的本地更改（如果有）
 2. 获取 upstream 最新代码
-3. 合并到当前分支，**保留 bosszhipin 等自定义功能**
+3. 合并到当前分支
 4. 由于是 Editable 安装，无需重新 pip install
 
 #### 方式 2：纯净官方版本
@@ -28,7 +27,7 @@ agent-reach update
 pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
 ```
 
-⚠️ **警告**：此命令会完全替换为官方最新版，**丢失 Boss直聘检测等自定义功能**。
+⚠️ **警告**：此命令会完全替换为官方最新版，**丢失自定义功能**。
 
 ---
 
@@ -70,7 +69,7 @@ If it says "已是最新版本", you're done — tell the user.
 
 #### Method A: Preserve Custom Features (Recommended)
 
-Use the custom `update` command to merge upstream changes while keeping bosszhipin and other custom channels:
+Use the custom `update` command to merge upstream changes:
 
 ```bash
 agent-reach update
@@ -84,7 +83,7 @@ agent-reach update --dry-run
 
 #### Method B: Clean Official Version
 
-⚠️ **Warning**: This will remove bosszhipin channel detection and other custom features.
+⚠️ **Warning**: This will remove custom features.
 
 ```bash
 pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
@@ -99,9 +98,9 @@ agent-reach doctor
 
 Report the new version and channel status to the user. If any channel changed status (was ✅ now ❌), investigate and fix.
 
-Expected channels in this fork (16 total):
-- Zero-config: 网页, YouTube, RSS, GitHub(公开), 微信公众号, 微博, V2EX
-- With setup: Twitter, B站, Reddit, 小红书, 抖音, LinkedIn, Boss直聘, 小宇宙播客, Exa搜索
+Expected Channels in this fork (15 total):
+- Zero-config: 网页, YouTube, RSS, GitHub(公开), 微信公众号, 微博, V2EX, 雪球
+- With setup: Twitter, B站, Reddit, 小红书, 抖音, LinkedIn, 小宇宙播客, Exa搜索
 
 ### Step 4: Update SKILL.md (if installed)
 
@@ -132,36 +131,21 @@ Done. Tell the user what version they're now on and how many channels are availa
 
 ## Custom Features in This Fork
 
-### 1. Boss直聘 Channel Detection
-
-Official repo removed bosszhipin in PR #135. This fork keeps it:
-
-```bash
-agent-reach doctor
-# Output: ✅ Boss直聘职位搜索 — 完整可用
-```
-
-Requirements:
-- mcporter installed
-- bosszhipin MCP configured: `mcporter config add bosszhipin http://localhost:8000/mcp`
-
-### 2. Custom Update Command
+### 1. Custom Update Command
 
 The `agent-reach update` command provides a safer way to get upstream updates:
 
 - ✅ Auto-commits local changes before merging
 - ✅ Fetches and merges upstream/main
-- ✅ Preserves custom channels (bosszhipin, etc.)
 - ✅ Handles merge conflicts with clear instructions
 - ✅ No need to re-run pip install (editable mode)
 
-### 3. Full Channel Support
+### 2. Full Channel Support
 
-This fork includes all channels from upstream plus preserved custom ones:
+This fork includes all channels from upstream:
 
 | Channel | Status | Notes |
 |---------|--------|-------|
-| Boss直聘 | ✅ Preserved | Officially removed, kept in this fork |
 | 微博 | ✅ Available | From upstream |
 | V2EX | ✅ Available | From upstream |
 | 小宇宙播客 | ✅ Available | From upstream |
@@ -200,4 +184,4 @@ pip uninstall agent-reach -y
 pip install https://github.com/Panniantong/agent-reach/archive/main.zip
 ```
 
-⚠️ This will lose bosszhipin detection and other custom features.
+⚠️ This will lose custom features.
