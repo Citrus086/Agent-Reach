@@ -14,6 +14,8 @@
   <a href="#快速上手">快速开始</a> · <a href="docs/README_en.md">English</a> · <a href="docs/README_ja.md">日本語</a> · <a href="docs/README_ko.md">한국어</a> · <a href="#支持的平台">支持平台</a> · <a href="#设计理念">设计理念</a>
 </p>
 
+> 🍊 **本分支自定义功能**：新增 [`agent-reach update`](#更新) 命令 | [查看更新文档](docs/update.md)
+
 ---
 
 ## 为什么需要 Agent Reach？
@@ -112,9 +114,36 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 
 就这一步。Agent 会自己完成剩下的所有事情。
 
-> 🔄 **已安装过？** 更新也是一句话：
+---
+
+## 更新
+
+本分支提供两种更新方式：
+
+### 方式 1：保留自定义功能（推荐）
+
+使用本分支新增的 `agent-reach update` 命令，自动合并上游更新：
+
+```bash
+agent-reach update
+```
+
+预览更新内容（不实际执行）：
+```bash
+agent-reach update --dry-run
+```
+
+### 方式 2：官方纯净版本
+
+⚠️ 会丢失自定义功能：
+
+```bash
+pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip
+```
+
+或者让 Agent 帮你更新：
 > ```
-> 帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> 帮我更新 Agent Reach：https://raw.githubusercontent.com/Citrus086/Agent-Reach/my-version/docs/update.md
 > ```
 
 > 🛡️ **担心安全？** 可以用安全模式——不会自动装系统包，只告诉你需要什么：
