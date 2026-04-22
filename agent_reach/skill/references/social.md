@@ -1,26 +1,69 @@
 # 社交媒体 & 社区
 
-小红书、抖音、Twitter/X、微博、B站、V2EX、Reddit、雪球。
+小红书、抖音、Twitter/X、微博、B站、V2EX、Reddit。
 
-## 小红书 / XiaoHongShu
+## 小红书 / XiaoHongShu (xhs-cli)
+
+### 稳定可用的命令
 
 ```bash
-# 搜索笔记
-mcporter call 'xiaohongshu.search_feeds(keyword: "query")'
+# 搜索笔记（推荐入口）
+xhs search "query"
 
-# 获取笔记详情
-mcporter call 'xiaohongshu.get_feed_detail(feed_id: "xxx", xsec_token: "yyy")'
+# 阅读笔记详情（必须用搜索结果中的 URL 或 ID，不能裸 note_id）
+xhs read NOTE_ID_OR_URL
 
-# 获取笔记详情 + 评论
-mcporter call 'xiaohongshu.get_feed_detail(feed_id: "xxx", xsec_token: "yyy", load_all_comments: true)'
+# 查看评论
+xhs comments NOTE_ID_OR_URL
 
-# 发布内容
-mcporter call 'xiaohongshu.publish_content(title: "标题", content: "正文", images: ["/path/img.jpg"], tags: ["tag"])'
+# 浏览热门
+xhs hot
+
+# 推荐 feed
+xhs feed
 ```
 
-> **需要登录**: 使用 Cookie-Editor 浏览器插件导出 cookies。运行 `agent-reach doctor` 检查状态。
+### 已知不稳定的命令（v0.6.4）
+
+```bash
+# 以下命令当前可能返回 API error，谨慎使用：
+xhs user USER_ID          # 可能返回 {code: -1}
+xhs user-posts USER_ID    # 可能返回 {code: -1}
+xhs favorites              # 可能返回 API error
+```
+
+### 重要注意事项
+
+> **安装**: `pipx install xiaohongshu-cli`，然后 `xhs login`（自动从浏览器提取 Cookie）。
+>
+> **xsec_token 限制**: 小红书强制 xsec_token 机制，**不能直接用裸 note_id 去读**。正确流程是：先 `xhs search` 或 `xhs feed` 获取结果，再用结果中的 URL/ID 去 `xhs read`。直接构造 note_id 会被拦截。
+>
+> **频率控制**: 高频请求（批量搜索、深翻评论）会触发验证码，这是平台限制无法绕过。建议每次操作间隔 2-3 秒。
+>
+> **POST 操作风险**: 发帖(post)、评论(comment)、点赞(like) 等写操作在 v0.6.x 可能因签名问题返回 406。如需使用，建议降级到 v0.3.5 (`pipx install xiaohongshu-cli==0.3.5`)。
 
 ## 抖音 / Douyin
+
+### 安装与配置
+
+`douyin-mcp-server` 是 **stdio 模式**的 MCP server，需先安装再注册到 mcporter：
+
+```bash
+# 1. 安装
+pipx install douyin-mcp-server
+
+# 2. 查找安装路径
+pipx runpip douyin-mcp-server show -f 2>/dev/null | grep "Location" \
+  || find ~/.local -name "douyin-mcp-server" 2>/dev/null | head -1
+
+# 3. 注册到 mcporter（使用 stdio 模式，将路径替换为上一步的输出）
+mcporter config add douyin --command "/path/to/douyin-mcp-server" --scope home
+```
+
+> **注意**：`agent-reach install --channels douyin` 暂不支持抖音渠道（抖音在"可选渠道待解锁"列表）。
+> HTTP 模式（`mcporter config add douyin http://localhost:18070/mcp`）**无法正常工作**，请使用上方 stdio 方式。
+
+### 用法
 
 ```bash
 # 解析视频信息
@@ -35,24 +78,49 @@ mcporter call 'douyin.extract_douyin_text(share_link: "https://v.douyin.com/xxx/
 
 > **无需登录**
 
-## Twitter/X (bird CLI)
+## Twitter/X (twitter-cli)
+
+### 稳定命令
 
 ```bash
-# 搜索推文
-bird search "query" -n 10 --json
+# 首页时间线（最稳定）
+twitter feed -n 20
 
-# 读取单条推文
-bird read TWEET_ID --json
+# 读取单条推文（含回复）
+twitter tweet URL_OR_ID
+
+# 读取长文 / X Article
+twitter article URL_OR_ID
 
 # 用户时间线
-bird user-tweets USERNAME -n 20 --json
+twitter user-posts @username -n 20
 
-# 读取完整 thread
-bird thread TWEET_ID --json
+# 用户资料
+twitter user @username
 ```
 
-> **需要配置**: `agent-reach configure twitter-cookies "auth_token=xxx; ct0=yyy"`
-> 安装: `npm install -g @steipete/bird`
+### 可能不稳定的命令
+
+```bash
+# 搜索推文（Twitter 频繁改 GraphQL 端点，可能 404）
+twitter search "query" -n 10
+# 如果 search 返回 404，升级 twitter-cli：pipx upgrade twitter-cli
+
+# likes（2024 年后只能看自己的，平台限制）
+twitter likes
+```
+
+### 重要注意事项
+
+> **安装**: `pipx install twitter-cli`（确保 v0.8.5+）
+>
+> **认证**: 推荐用 Cookie-Editor 导出后设置环境变量 `TWITTER_AUTH_TOKEN` + `TWITTER_CT0`。自动提取在 SSH/Docker/无头环境不可用。
+>
+> **IP 风控**: 不要在 VPS/数据中心 IP 上频繁调用，尤其是 followers/following，有封号风险。使用住宅代理或本地环境。
+>
+> **search 可能失效**: Twitter 频繁修改 GraphQL API，search 命令可能随时返回 404。如遇到，先 `pipx upgrade twitter-cli`。如果最新版仍不行，说明上游还没跟上 Twitter 的改动，用 `twitter feed` 替代。
+>
+> **输出格式**: 建议用 `--yaml` 或 `--json` 获得结构化输出，对 AI agent 更友好。
 
 ## 微博 / Weibo
 
@@ -136,58 +204,25 @@ user = ch.get_user("Livid")
 
 > **节点列表**: https://www.v2ex.com/planes
 
-## Reddit (公开 API)
+## Reddit (rdt-cli)
 
 ```bash
-# 获取 subreddit 热门帖子
-curl -s "https://www.reddit.com/r/SUBREDDIT/hot.json?limit=10" -H "User-Agent: agent-reach/1.0"
+# 搜索帖子
+rdt search "query" --limit 10
 
-# 搜索
-curl -s "https://www.reddit.com/search.json?q=QUERY&limit=10" -H "User-Agent: agent-reach/1.0"
+# 读帖子全文 + 评论
+rdt read POST_ID
+
+# 浏览 subreddit
+rdt sub python --limit 20
+
+# 浏览热门
+rdt popular --limit 10
+
+# 浏览 /r/all
+rdt all --limit 10
 ```
 
-> **注意**: 服务器 IP 可能遇到 403 错误。搜索建议使用 Exa 代替，或配置代理。
-
-## 雪球 / Xueqiu (股票行情)
-
-```bash
-# 股票实时行情 (A/港股/美股)
-mcporter call 'xueqiu.get_stock_quote(symbol: "SH600519")'
-
-# 搜索股票
-mcporter call 'xueqiu.search_stock(query: "茅台")'
-
-# 热门帖子
-mcporter call 'xueqiu.get_hot_posts(limit: 10)'
-
-# 热门股票榜 (stock_type: 10=人气榜, 12=关注榜)
-mcporter call 'xueqiu.get_hot_stocks(limit: 10, stock_type: 10)'
-```
-
-```python
-from agent_reach.channels.xueqiu import XueqiuChannel
-
-ch = XueqiuChannel()
-
-# 获取股票行情
-# 符号格式: SH600519 沪市, SZ000858 深市, AAPL 美股, 00700 港股
-quote = ch.get_stock_quote("SH600519")
-print(f"{quote['name']} ({quote['symbol']}): {quote['current']} ({quote['percent']}%)")
-
-# 搜索股票
-stocks = ch.search_stock("茅台", limit=5)
-for s in stocks:
-    print(f"{s['name']} ({s['symbol']}) - {s['exchange']}")
-
-# 热门帖子
-posts = ch.get_hot_posts(limit=10)
-for p in posts:
-    print(f"{p['author']}: {p['text'][:50]}... ({p['likes']} 赞)")
-
-# 热门股票
-hot = ch.get_hot_stocks(limit=10, stock_type=10)
-for s in hot:
-    print(f"#{s['rank']} {s['name']} ({s['symbol']}): {s['current']} ({s['percent']}%)")
-```
-
-> **零配置** — 无需登录，自动生成 session cookies。
+> **安装**: `pipx install rdt-cli`（确保 v0.4.2+）。无需登录即可搜索和阅读。
+> 需要登录的功能：`rdt feed --subs-only`（订阅列表）、`rdt saved`（收藏）。
+> 建议使用 `--yaml` 输出，对 AI agent 更友好。

@@ -1,6 +1,6 @@
 [project]
 name = "agent-reach"
-version = "1.3.0"
+version = "1.4.0"
 description = "Give your AI Agent eyes to see the entire internet. Search + Read 10+ platforms."
 readme = "README.md"
 license = {text = "MIT"}
@@ -66,6 +66,7 @@ packages = ["agent_reach"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "agent_reach/guides" = "agent_reach/guides"
+# Keep the whole skill directory so SKILL.md, SKILL_en.md, and references/ ship together.
 "agent_reach/skill" = "agent_reach/skill"
 "agent_reach/scripts" = "agent_reach/scripts"
 

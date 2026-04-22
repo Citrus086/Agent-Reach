@@ -68,6 +68,10 @@ def main():
                            help="Safe mode: skip automatic system changes, show what's needed instead")
     p_install.add_argument("--dry-run", action="store_true",
                            help="Show what would be done without making any changes")
+    p_install.add_argument("--channels", default="",
+                           help="Comma-separated optional channels to install "
+                                "(twitter,weibo,wechat,xiaoyuzhou,xueqiu,xiaohongshu,"
+                                "reddit,bilibili,douyin,linkedin,all)")
 
     # ── configure ──
     p_conf = sub.add_parser("configure", help="Set a config value or auto-extract from browser")
@@ -84,10 +88,6 @@ def main():
     # ── doctor ──
     sub.add_parser("doctor", help="Check platform availability")
 
-    # ── format ──
-    p_format = sub.add_parser("format", help="Clean and format platform API output")
-    p_format.add_argument("platform", choices=["xhs"], help="Platform to format (xhs)")
-
     # ── uninstall ──
     p_uninstall = sub.add_parser("uninstall", help="Remove all Agent Reach config, tokens, and skill files")
     p_uninstall.add_argument("--dry-run", action="store_true",
@@ -103,13 +103,12 @@ def main():
     p_skill_group.add_argument("--uninstall", action="store_true",
                                help="Remove SKILL.md from agent skill directories")
 
+    # ── format ──
+    p_format = sub.add_parser("format", help="Clean and format platform API output")
+    p_format.add_argument("platform", choices=["xhs"], help="Platform to format (xhs)")
+
     # ── check-update ──
     sub.add_parser("check-update", help="Check for new versions and changes")
-
-    # ── update ──
-    p_update = sub.add_parser("update", help="Update Agent Reach from upstream (preserves custom changes)")
-    p_update.add_argument("--dry-run", action="store_true",
-                          help="Show what would be done without making changes")
 
     # ── watch ──
     sub.add_parser("watch", help="Quick health check + update check (for scheduled tasks)")
@@ -134,8 +133,6 @@ def main():
         _cmd_doctor()
     elif args.command == "check-update":
         _cmd_check_update()
-    elif args.command == "update":
-        _cmd_update(args)
     elif args.command == "watch":
         _cmd_watch()
     elif args.command == "setup":
@@ -180,11 +177,33 @@ def _cmd_install(args):
         print("SAFE MODE — skipping automatic system changes")
         print()
 
+    # ── Parse --channels ──
+    CHANNEL_INSTALLERS = {
+        "twitter":     _install_twitter_deps,
+        "weibo":       _install_weibo_deps,
+        "wechat":      _install_wechat_deps,
+        "xiaoyuzhou":  _install_xiaoyuzhou_deps,
+        "xiaohongshu": _install_xhs_deps,
+        "reddit":      _install_reddit_deps,
+        "bilibili":    _install_bili_deps,
+        # xueqiu: cookie-only, no install step
+        # douyin/linkedin: manual setup, no auto-install
+    }
+    COOKIE_CHANNELS = {"twitter", "xueqiu", "bilibili"}
+
+    requested_channels = set()
+    if args.channels:
+        raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
+        if "all" in raw:
+            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "douyin", "linkedin"}
+        else:
+            requested_channels = set(raw)
+
     # Auto-detect environment
     env = args.env
     if env == "auto":
         env = _detect_environment()
-    
+
     if env == "server":
         print(f"Environment: Server/VPS (auto-detected)")
     else:
@@ -193,13 +212,12 @@ def _cmd_install(args):
     # Apply explicit flags
     if args.proxy:
         if dry_run:
-            print(f"[dry-run] Would configure proxy for Reddit + Bilibili")
+            print(f"[dry-run] Would configure proxy for Bilibili")
         else:
-            config.set("reddit_proxy", args.proxy)
             config.set("bilibili_proxy", args.proxy)
-            print(f"✅ Proxy configured for Reddit + Bilibili")
+            print(f"✅ Proxy configured for Bilibili")
 
-    # ── Install system dependencies ──
+    # ── Install core system dependencies (lightweight, always) ──
     print()
     if dry_run:
         _install_system_deps_dryrun()
@@ -208,7 +226,7 @@ def _cmd_install(args):
     else:
         _install_system_deps()
 
-    # ── mcporter (for Exa search + XiaoHongShu) ──
+    # ── mcporter (for Exa search) ──
     print()
     if dry_run:
         print("[dry-run] Would install mcporter and configure Exa search")
@@ -217,10 +235,26 @@ def _cmd_install(args):
     else:
         _install_mcporter()
 
-    # Auto-import cookies on local computers
-    if env == "local" and not safe_mode and not dry_run:
+    # ── Install optional channels (only if --channels specified) ──
+    if requested_channels and not dry_run and not safe_mode:
         print()
-        print("Trying to import cookies from browser...")
+        print("Installing optional channels...")
+        for ch_name in sorted(requested_channels):
+            installer = CHANNEL_INSTALLERS.get(ch_name)
+            if installer:
+                installer()
+
+    if requested_channels and dry_run:
+        print()
+        print(f"[dry-run] Would install optional channels: {', '.join(sorted(requested_channels))}")
+
+    # ── Auto-import cookies (only if cookie-needing channels are requested) ──
+    needs_cookies = bool(requested_channels & COOKIE_CHANNELS)
+    if env == "local" and needs_cookies and not safe_mode and not dry_run:
+        print()
+        print("Importing cookies from browser...")
+        print("  (macOS may ask for your login password to access the Keychain — this is normal,")
+        print("   it only happens once during install. Enter your password or click 'Allow'.)")
         try:
             from agent_reach.cookie_extract import configure_from_browser
             results = configure_from_browser("chrome", config)
@@ -230,7 +264,6 @@ def _cmd_install(args):
                     print(f"  ✅ {platform}: {message}")
                     found = True
             if not found:
-                # Try firefox
                 results = configure_from_browser("firefox", config)
                 for platform, success, message in results:
                     if success:
@@ -239,21 +272,17 @@ def _cmd_install(args):
             if not found:
                 print("  -- No cookies found (normal if you haven't logged into these sites)")
         except Exception:
-            print("  -- Could not read browser cookies (browser might be open)")
-    elif env == "local" and safe_mode:
-        print()
-        print("Skipped auto cookie import (safe mode).")
-        print("   To import manually: agent-reach configure --from-browser chrome")
-    elif env == "local" and dry_run:
+            print("  -- Could not read browser cookies (browser might be open or password was denied)")
+    elif env == "local" and needs_cookies and dry_run:
         print()
         print("[dry-run] Would try to import cookies from Chrome/Firefox")
 
     # Environment-specific advice
     if env == "server":
         print()
-        print("Tip: Reddit and Bilibili block server IPs.")
-        print("   Reddit search still works via Exa (free).")
-        print("   For full access: agent-reach configure proxy http://user:pass@ip:port")
+        print("Tip: Bilibili may block server IPs.")
+        print("   Reddit: rdt-cli works without proxy (pipx install rdt-cli).")
+        print("   For Bilibili full access: agent-reach configure proxy http://user:pass@ip:port")
         print("   Cheap option: https://www.webshare.io ($1/month)")
 
     # Test channels
@@ -274,9 +303,12 @@ def _cmd_install(args):
 
         print(f"✅ Installation complete! {ok}/{total} channels active.")
 
-        if ok < total:
+        if not requested_channels:
+            # First install — hint about optional channels
             print()
-            print("Some channels are not active yet. If you're an AI Agent, try to fix them yourself — then run `agent-reach doctor` again.")
+            print("More channels available! Use --channels to install:")
+            print("   agent-reach install --channels=twitter,weibo,xiaohongshu,...")
+            print("   agent-reach install --channels=all  (install everything)")
 
         # Star reminder
         print()
@@ -294,20 +326,47 @@ def _install_skill():
     import shutil
     import importlib.resources
 
+    def _is_english_locale(value: str) -> bool:
+        normalized = value.strip().lower()
+        return normalized.startswith("en") or normalized.startswith("english")
+
+    def _skill_resource_name() -> str:
+        locale_candidates = (
+            os.environ.get("AGENT_REACH_LANG", ""),
+            os.environ.get("LC_ALL", ""),
+            os.environ.get("LC_MESSAGES", ""),
+            os.environ.get("LANG", ""),
+        )
+        if any(_is_english_locale(candidate) for candidate in locale_candidates):
+            return "SKILL_en.md"
+        return "SKILL.md"
+
+    def _read_skill_markdown(skill_pkg):
+        resource_name = _skill_resource_name()
+        try:
+            return skill_pkg.joinpath(resource_name).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return skill_pkg.joinpath("SKILL.md").read_text(encoding="utf-8")
+
     def _copy_skill_dir(target: str) -> bool:
-        """Copy entire skill directory (SKILL.md + references/)."""
+        """Copy entire skill directory (locale-specific SKILL.md + references/)."""
         try:
             # Clear existing installation
             if os.path.exists(target):
                 shutil.rmtree(target)
             os.makedirs(target, exist_ok=True)
 
-            # Get skill directory from package
-            skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+            # Get skill directory from package (with fallback for editable installs)
+            try:
+                skill_pkg = importlib.resources.files("agent_reach").joinpath("skill")
+                skill_md = _read_skill_markdown(skill_pkg)
+            except Exception:
+                from pathlib import Path
+                skill_pkg = Path(__file__).resolve().parent / "skill"
+                skill_md = _read_skill_markdown(skill_pkg)
 
-            # Copy SKILL.md
-            skill_md = skill_pkg.joinpath("SKILL.md").read_text()
-            with open(os.path.join(target, "SKILL.md"), "w") as f:
+            # Copy SKILL.md using the selected locale file
+            with open(os.path.join(target, "SKILL.md"), "w", encoding="utf-8") as f:
                 f.write(skill_md)
 
             # Copy references/ directory
@@ -316,9 +375,10 @@ def _install_skill():
             os.makedirs(refs_target, exist_ok=True)
 
             for ref_file in refs_pkg.iterdir():
-                if ref_file.suffix == ".md":
-                    content = ref_file.read_text()
-                    with open(os.path.join(refs_target, ref_file.name), "w") as f:
+                name = ref_file.name if hasattr(ref_file, 'name') else str(ref_file).split('/')[-1]
+                if name.endswith(".md"):
+                    content = ref_file.read_text(encoding="utf-8") if hasattr(ref_file, 'read_text') else ref_file.read_text()
+                    with open(os.path.join(refs_target, name), "w", encoding="utf-8") as f:
                         f.write(content)
 
             return True
@@ -326,15 +386,11 @@ def _install_skill():
             print(f"  Warning: Could not install skill: {e}")
             return False
 
-    # Determine skill install path
-    # Priority 1: OPENCLAW_HOME environment variable (if set)
-    # Priority 2: ~/.agents/skills (Generic agents)
-    # Priority 3: ~/.openclaw/skills (OpenClaw default)
-    # Priority 4: ~/.claude/skills (Claude Code)
+    # Determine skill install path (priority: .agents > openclaw > claude)
     skill_dirs = [
-        os.path.expanduser("~/.agents/skills"),      # Generic agents
+        os.path.expanduser("~/.agents/skills"),      # Generic agents (priority)
         os.path.expanduser("~/.openclaw/skills"),    # OpenClaw
-        os.path.expanduser("~/.claude/skills"),      # Claude Code
+        os.path.expanduser("~/.claude/skills"),      # Claude Code (if exists)
     ]
 
     # Insert OPENCLAW_HOME path at the beginning if environment variable is set
@@ -359,6 +415,70 @@ def _install_skill():
             print(f"Skill installed: {target}")
         else:
             print("  -- Could not install agent skill (optional)")
+            print("  -- Tip: install OpenClaw, Claude Code, or create ~/.agents/skills/ manually")
+
+
+def _uninstall_skill():
+    """Remove SKILL.md from all known agent skill directories."""
+    import shutil
+
+    skill_dirs = [
+        ("~/.openclaw/skills/agent-reach", "OpenClaw"),
+        ("~/.claude/skills/agent-reach", "Claude Code"),
+        ("~/.agents/skills/agent-reach", "Agent"),
+    ]
+
+    # Also check OPENCLAW_HOME
+    openclaw_home = os.environ.get("OPENCLAW_HOME")
+    if openclaw_home:
+        skill_dirs.insert(
+            0,
+            (os.path.join(openclaw_home, ".openclaw", "skills", "agent-reach"), "OpenClaw"),
+        )
+
+    removed = False
+    for skill_path_template, platform_name in skill_dirs:
+        skill_path = os.path.expanduser(skill_path_template)
+        if os.path.isdir(skill_path):
+            try:
+                shutil.rmtree(skill_path)
+                print(f"  Removed {platform_name} skill: {skill_path}")
+                removed = True
+            except Exception as e:
+                print(f"  Could not remove {skill_path}: {e}")
+
+    if not removed:
+        print("  No skill installations found.")
+
+
+def _cmd_skill(args):
+    """Manage agent skill registration."""
+    if args.install:
+        _install_skill()
+    elif args.uninstall:
+        _uninstall_skill()
+
+
+def _cmd_format(args):
+    """Clean and format platform API output from stdin."""
+    import json
+    import sys
+
+    if args.platform == "xhs":
+        from agent_reach.channels.xiaohongshu import format_xhs_result
+
+        raw = sys.stdin.read().strip()
+        if not raw:
+            print("Error: no input on stdin", file=sys.stderr)
+            sys.exit(1)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            print(f"Error: invalid JSON: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        cleaned = format_xhs_result(data)
+        print(json.dumps(cleaned, ensure_ascii=False, indent=2))
 
 
 def _install_system_deps():
@@ -450,25 +570,6 @@ def _install_system_deps():
         except Exception:
             print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
 
-    # ── xreach CLI (for Twitter search) ──
-    if shutil.which("xreach"):
-        print("  ✅ xreach CLI already installed")
-    else:
-        if shutil.which("npm"):
-            try:
-                subprocess.run(
-                    ["npm", "install", "-g", "xreach-cli"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=120,
-                )
-                if shutil.which("xreach"):
-                    print("  ✅ xreach CLI installed (Twitter search + timeline)")
-                else:
-                    print("  -- xreach CLI install failed (optional — Twitter reading still works via Jina)")
-            except Exception:
-                print("  -- xreach CLI install failed (optional — Twitter reading still works via Jina)")
-        else:
-            print("  -- xreach CLI requires Node.js (optional — Twitter reading still works via Jina)")
-
     # ── undici (proxy support for Node.js fetch) ──
     npm_cmd = shutil.which("npm")
     if npm_cmd:
@@ -481,7 +582,7 @@ def _install_system_deps():
                 subprocess.run([npm_cmd, "install", "-g", "undici"], capture_output=True, encoding="utf-8", errors="replace", timeout=60)
                 print("  ✅ undici installed (Node.js proxy support)")
             except Exception:
-                print("  -- undici install failed (optional — xreach may not work behind proxies)")
+                print("  -- undici install failed (optional — may not work behind proxies)")
 
     # ── yt-dlp JS runtime config (YouTube requires external JS runtime) ──
     if shutil.which("node"):
@@ -502,14 +603,9 @@ def _install_system_deps():
             except Exception:
                 print("  -- Could not configure yt-dlp JS runtime (YouTube may not work)")
 
-    # ── Weibo (mcp-server-weibo fork with visitor passport fix) ──
-    _install_weibo_deps()
-
-    # ── Xiaoyuzhou Podcast (transcribe.sh + ffmpeg) ──
-    _install_xiaoyuzhou_deps()
-
-    # ── WeChat Articles (miku_ai + camoufox + wechat-article-for-ai) ──
-    _install_wechat_deps()
+    # NOTE: twitter-cli, weibo, xiaoyuzhou, wechat, xhs-cli etc. are optional.
+    # They are installed via --channels flag, not here.
+    # See CHANNEL_INSTALLERS in _cmd_install().
 
 
 def _install_xiaoyuzhou_deps():
@@ -553,6 +649,98 @@ def _install_xiaoyuzhou_deps():
     else:
         print("  -- Groq API key not set. Get free key at https://console.groq.com")
         print("     Then run: agent-reach configure groq-key gsk_xxxxx")
+
+
+def _install_twitter_deps():
+    """Install twitter-cli for Twitter search + timeline."""
+    import shutil
+    import subprocess
+
+    print("Setting up Twitter (twitter-cli)...")
+    if shutil.which("twitter"):
+        print("  ✅ twitter-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "twitter-cli"]),
+                      ("uv", ["uv", "tool", "install", "twitter-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("twitter"):
+                    print("  ✅ twitter-cli installed")
+                    return
+            except Exception:
+                pass
+    print("  [!]  twitter-cli install failed. Run: pipx install twitter-cli")
+
+
+def _install_xhs_deps():
+    """Install xhs-cli (xiaohongshu-cli) for XiaoHongShu."""
+    import shutil
+    import subprocess
+
+    print("Setting up XiaoHongShu (xhs-cli)...")
+    if shutil.which("xhs"):
+        print("  ✅ xhs-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "xiaohongshu-cli"]),
+                      ("uv", ["uv", "tool", "install", "xiaohongshu-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("xhs"):
+                    print("  ✅ xhs-cli installed (run `xhs login` to authenticate)")
+                    return
+            except Exception:
+                pass
+    print("  [!]  xhs-cli install failed. Run: pipx install xiaohongshu-cli")
+
+
+def _install_reddit_deps():
+    """Install rdt-cli for Reddit search + reading."""
+    import shutil
+    import subprocess
+
+    print("Setting up Reddit (rdt-cli)...")
+    if shutil.which("rdt"):
+        print("  ✅ rdt-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "rdt-cli"]),
+                      ("uv", ["uv", "tool", "install", "rdt-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("rdt"):
+                    print("  ✅ rdt-cli installed")
+                    return
+            except Exception:
+                pass
+    print("  [!]  rdt-cli install failed. Run: pipx install rdt-cli")
+
+
+def _install_bili_deps():
+    """Install bili-cli for Bilibili hot/rank/search."""
+    import shutil
+    import subprocess
+
+    print("Setting up Bilibili (bili-cli)...")
+    if shutil.which("bili"):
+        print("  ✅ bili-cli already installed")
+        return
+    for tool, cmd in [("pipx", ["pipx", "install", "bilibili-cli"]),
+                      ("uv", ["uv", "tool", "install", "bilibili-cli"])]:
+        if shutil.which(tool):
+            try:
+                subprocess.run(cmd, capture_output=True, encoding="utf-8",
+                               errors="replace", timeout=120)
+                if shutil.which("bili"):
+                    print("  ✅ bili-cli installed")
+                    return
+            except Exception:
+                pass
+    print("  [!]  bili-cli install failed. Run: pipx install bilibili-cli")
 
 
 def _install_weibo_deps():
@@ -681,7 +869,6 @@ def _install_system_deps_safe():
     deps = [
         ("gh", ["gh"], "GitHub CLI", "https://cli.github.com — or: apt install gh / brew install gh"),
         ("node", ["node", "npm"], "Node.js", "https://nodejs.org — or: apt install nodejs npm"),
-        ("xreach", ["xreach"], "xreach CLI (Twitter)", "npm install -g xreach-cli"),
     ]
 
     missing = []
@@ -701,29 +888,6 @@ def _install_system_deps_safe():
     else:
         print("  All system dependencies are installed!")
 
-    # WeChat check (Python packages, not binaries)
-    has_camoufox = has_miku = False
-    try:
-        import camoufox  # noqa: F401
-        has_camoufox = True
-    except ImportError:
-        pass
-    try:
-        import miku_ai  # noqa: F401
-        has_miku = True
-    except ImportError:
-        pass
-    if has_camoufox and has_miku:
-        print("  ✅ WeChat article tools already installed")
-    else:
-        pkgs = []
-        if not has_camoufox:
-            pkgs.extend(["camoufox[geoip]", "markdownify", "beautifulsoup4", "httpx"])
-        if not has_miku:
-            pkgs.append("miku_ai")
-        print(f"  -- WeChat article tools not found")
-        print(f"    Install: pip install {' '.join(pkgs)}")
-
 
 def _install_system_deps_dryrun():
     """Dry-run: just show what would be checked/installed."""
@@ -734,7 +898,6 @@ def _install_system_deps_dryrun():
     checks = [
         ("gh CLI", ["gh"], "apt install gh / brew install gh"),
         ("Node.js", ["node"], "curl NodeSource setup | bash + apt install nodejs"),
-        ("xreach CLI", ["xreach"], "npm install -g xreach-cli"),
     ]
 
     for label, binaries, method in checks:
@@ -744,30 +907,14 @@ def _install_system_deps_dryrun():
         else:
             print(f"  {label}: would install via: {method}")
 
-    # WeChat
-    has_camoufox = has_miku = False
-    try:
-        import camoufox  # noqa: F401
-        has_camoufox = True
-    except ImportError:
-        pass
-    try:
-        import miku_ai  # noqa: F401
-        has_miku = True
-    except ImportError:
-        pass
-    if has_camoufox and has_miku:
-        print("  ✅ WeChat article tools: already installed, skip")
-    else:
-        print("  WeChat article tools: would install via: pip install camoufox[geoip] markdownify beautifulsoup4 httpx miku_ai")
 
 
 def _install_mcporter():
-    """Install mcporter and configure Exa + XiaoHongShu MCP servers."""
+    """Install mcporter and configure Exa search."""
     import shutil
     import subprocess
 
-    print("Setting up mcporter (search + XiaoHongShu backend)...")
+    print("Setting up mcporter (search backend)...")
 
     if shutil.which("mcporter"):
         print("  ✅ mcporter already installed")
@@ -807,30 +954,7 @@ def _install_mcporter():
     except Exception:
         print("  [!]  Could not configure Exa. Run manually: mcporter config add exa https://mcp.exa.ai/mcp")
 
-    # Check XiaoHongShu MCP (only if server is running)
-    try:
-        r = subprocess.run(
-            ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        )
-        if "xiaohongshu" in r.stdout:
-            print("  ✅ XiaoHongShu MCP already configured")
-        else:
-            # Check if XHS MCP server is running on localhost:18060
-            import requests
-            try:
-                requests.get("http://localhost:18060/", timeout=3)
-                subprocess.run(
-                    ["mcporter", "config", "add", "xiaohongshu", "http://localhost:18060/mcp"],
-                    capture_output=True, encoding="utf-8", errors="replace", timeout=10,
-                )
-                print("  ✅ XiaoHongShu MCP auto-detected and configured")
-            except Exception:
-                print("  -- XiaoHongShu MCP not detected (optional)")
-                print("     Install: docker run -d --name xiaohongshu-mcp -p 18060:18060 xpzouying/xiaohongshu-mcp")
-                print("     Then:    mcporter config add xiaohongshu http://localhost:18060/mcp")
-                print("     Repo:    https://github.com/xpzouying/xiaohongshu-mcp")
-    except Exception:
-        pass
+    # NOTE: xhs-cli is now optional, installed via --channels=xiaohongshu
 
 
 def _install_mcporter_safe():
@@ -934,26 +1058,9 @@ def _cmd_configure(args):
         return
 
     if args.key == "proxy":
-        config.set("reddit_proxy", value)
         config.set("bilibili_proxy", value)
-        print(f"✅ Proxy configured for Reddit + Bilibili!")
-
-        # Auto-test
-        print("Testing Reddit access...", end=" ")
-        try:
-            import requests
-            resp = requests.get(
-                "https://www.reddit.com/r/test.json?limit=1",
-                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"},
-                proxies={"http": value, "https": value},
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                print("✅ Reddit works!")
-            else:
-                print(f"[!] Reddit returned {resp.status_code}")
-        except Exception as e:
-            print(f"[X] Failed: {e}")
+        print(f"✅ Proxy configured for Bilibili!")
+        print("  Note: Reddit 已改为通过 rdt-cli 访问，无需代理。")
 
     elif args.key == "twitter-cookies":
         # Accept two formats:
@@ -965,46 +1072,30 @@ def _cmd_configure(args):
             config.set("twitter_auth_token", auth_token)
             config.set("twitter_ct0", ct0)
 
-            # Sync credentials to xreach's session.json so xreach auth check works
-            try:
-                import json
-                xfetch_dir = os.path.join(os.path.expanduser("~"), ".config", "xfetch")
-                os.makedirs(xfetch_dir, exist_ok=True)
-                session_path = os.path.join(xfetch_dir, "session.json")
-                session_data = {}
-                if os.path.exists(session_path):
-                    with open(session_path, "r", encoding="utf-8") as sf:
-                        session_data = json.load(sf)
-                session_data["authToken"] = auth_token
-                session_data["ct0"] = ct0
-                with open(session_path, "w", encoding="utf-8") as sf:
-                    json.dump(session_data, sf, indent=2)
-                os.chmod(session_path, 0o600)
-                print("✅ Twitter cookies configured (synced to xreach)!")
-            except Exception as e:
-                print("✅ Twitter cookies configured!")
-                print(f"[!] Could not sync to xreach session.json: {e}")
+            # Sync credentials to twitter-cli env
+            print("✅ Twitter cookies configured!")
 
             print("Testing Twitter access...", end=" ")
             try:
                 import subprocess
-                xreach = shutil.which("xreach")
-                if not xreach:
-                    print("[!] xreach CLI not installed. Run: npm install -g xreach-cli")
+                twitter_bin = shutil.which("twitter")
+                if not twitter_bin:
+                    print("[!] twitter-cli not installed. Run: pipx install twitter-cli")
                 else:
                     import os
                     env = os.environ.copy()
-                    env["AUTH_TOKEN"] = auth_token
-                    env["CT0"] = ct0
+                    env["TWITTER_AUTH_TOKEN"] = auth_token
+                    env["TWITTER_CT0"] = ct0
                     result = subprocess.run(
-                        [xreach, "search", "test", "-n", "1"],
+                        [twitter_bin, "status"],
                         capture_output=True, encoding="utf-8", errors="replace", timeout=15,
                         env=env,
                     )
-                    if result.returncode == 0 and result.stdout.strip():
-                        print("✅ Twitter Advanced works!")
+                    output = (result.stdout or "") + (result.stderr or "")
+                    if "ok: true" in output:
+                        print("✅ Twitter access works!")
                     else:
-                        print(f"[!] Test returned no results (cookies might be wrong)")
+                        print("[!] Auth check failed (cookies might be wrong)")
             except Exception as e:
                 print(f"[X] Failed: {e}")
         else:
@@ -1321,7 +1412,7 @@ def _cmd_uninstall(args):
     print()
     print("Optional: remove tools installed by Agent Reach:")
     print("  npm uninstall -g mcporter")
-    print("  npm uninstall -g xreach-cli")
+    print("  pipx uninstall twitter-cli")
     print("  npm uninstall -g undici")
 
 
@@ -1336,38 +1427,8 @@ def _cmd_doctor():
     results = check_all(config)
     rprint(format_report(results))
 
-    # Auto-register skill if not already present (fixes #154)
+    # Auto-install skill if not already present (fixes #154)
     _install_skill()
-
-
-def _cmd_skill(args):
-    """Manage agent skill registration."""
-    if args.install:
-        _install_skill()
-    elif args.uninstall:
-        _uninstall_skill()
-
-
-def _cmd_format(args):
-    """Clean and format platform API output from stdin."""
-    import json
-    import sys
-
-    if args.platform == "xhs":
-        from agent_reach.channels.xiaohongshu import format_xhs_result
-
-        raw = sys.stdin.read().strip()
-        if not raw:
-            print("Error: no input on stdin", file=sys.stderr)
-            sys.exit(1)
-        try:
-            data = json.loads(raw)
-        except json.JSONDecodeError as e:
-            print(f"Error: invalid JSON: {e}", file=sys.stderr)
-            sys.exit(1)
-
-        cleaned = format_xhs_result(data)
-        print(json.dumps(cleaned, ensure_ascii=False, indent=2))
 
 
 def _cmd_setup():
@@ -1432,20 +1493,9 @@ def _cmd_setup():
             print("  跳过。公开 API 也能用")
     print()
 
-    # Step 3: Reddit proxy
-    print("【可选】Reddit 代理 — 完整阅读 Reddit 帖子+评论")
-    print("  Reddit 封锁很多 IP，需要 ISP 代理才能直接访问")
-    print("  格式: http://用户名:密码@IP:端口")
-    current = config.get("reddit_proxy")
-    if current:
-        print(f"  当前状态: ✅ 已配置")
-    else:
-        proxy = input("  REDDIT_PROXY (回车跳过): ").strip()
-        if proxy:
-            config.set("reddit_proxy", proxy)
-            print("  ✅ Reddit 完整阅读已开启！")
-        else:
-            print("  跳过。仍可通过搜索获取 Reddit 内容")
+    # Step 3: Reddit — rdt-cli
+    print("【信息】Reddit — 通过 rdt-cli 搜索和阅读，无需配置")
+    print("  安装：pipx install rdt-cli")
     print()
 
     # Step 4: Groq (Whisper)
@@ -1589,17 +1639,8 @@ def _cmd_check_update():
                 for line in body.strip().split("\n")[:20]:
                     print(f"  {line}")
             print()
-            print("两种更新方式可选：")
-            print()
-            print("方式 1 - 保留自定义功能（推荐）:")
-            print("  agent-reach update")
-            print("  说明: 自动合并上游更新，保留你的自定义修改")
-            print("  适用: 当前 Editable 安装，且不想丢失自定义功能")
-            print()
-            print("方式 2 - 纯净官方版本:")
+            print("更新命令:")
             print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
-            print("  说明: 完全替换为官方最新版（会丢失自定义功能）")
-            print("  适用: 想要干净官方版本，不介意丢失自定义功能")
             return "update_available"
         print(f"✅ 已是最新版本")
         return "up_to_date"
@@ -1621,17 +1662,8 @@ def _cmd_check_update():
         date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
         print(f"最新提交: {sha} ({date}) {msg}")
         print()
-        print("两种更新方式可选：")
-        print()
-        print("方式 1 - 保留自定义功能（推荐）:")
-        print("  agent-reach update")
-        print("  说明: 自动合并上游更新，保留你的自定义修改")
-        print("  适用: 当前 Editable 安装，且不想丢失自定义功能")
-        print()
-        print("方式 2 - 纯净官方版本:")
+        print("更新命令:")
         print("  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
-        print("  说明: 完全替换为官方最新版（会丢失自定义功能）")
-        print("  适用: 想要干净官方版本，不介意丢失自定义功能")
         return "unknown"
 
     commit_err = _classify_github_response_error(resp2)
@@ -1641,217 +1673,6 @@ def _cmd_check_update():
 
     print(f"[!] 无法检查更新（GitHub 返回 {resp2.status_code}）")
     return "error"
-
-
-def _cmd_update(args):
-    """Update Agent Reach by merging upstream changes (preserves custom modifications).
-
-    This command:
-    1. Auto-commits any unsaved local changes (with timestamp)
-    2. Fetches the latest changes from upstream/main
-    3. Merges them into the current branch
-    4. Preserves custom channels like weibo, v2ex, etc.
-
-    Safe for editable installs. No need to re-run pip install.
-    """
-    import subprocess
-    import os
-    from datetime import datetime
-
-    dry_run = args.dry_run if args else False
-
-    # Find git repository root
-    try:
-        repo_root = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        ).stdout.strip()
-    except Exception as e:
-        print(f"[!] 无法找到 Git 仓库: {e}")
-        print("    请确保在 Agent Reach Git 仓库目录中运行此命令")
-        return
-
-    if not repo_root:
-        print("[!] 当前目录不是 Git 仓库")
-        print("    请 cd 到 /Users/mima0000/Desktop/repos/agent-reach 后再运行")
-        return
-
-    os.chdir(repo_root)
-
-    print(f"📁 工作目录: {repo_root}")
-    print()
-
-    if dry_run:
-        print("🔍 DRY RUN 模式 - 显示将要执行的操作（无实际更改）")
-        print()
-
-    # Step 1: Check for uncommitted changes
-    try:
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        )
-        has_changes = bool(result.stdout.strip())
-    except Exception as e:
-        print(f"[!] 无法检查 Git 状态: {e}")
-        return
-
-    if has_changes:
-        if dry_run:
-            print("📦 发现未提交的本地更改")
-            print("   [dry-run] 将自动提交为: wip: auto-save before update YYYY-MM-DD")
-        else:
-            print("📦 发现未提交的本地更改，自动保存中...")
-            timestamp = datetime.now().strftime("%Y-%m-%d")
-            try:
-                subprocess.run(["git", "add", "-A"], capture_output=True, timeout=5)
-                subprocess.run(
-                    ["git", "commit", "-m", f"wip: auto-save before update {timestamp}"],
-                    capture_output=True, timeout=10
-                )
-                print(f"   ✅ 已自动提交: wip: auto-save before update {timestamp}")
-            except Exception as e:
-                print(f"   [!] 自动提交失败: {e}")
-                print("   请手动提交后再运行: git add -A && git commit -m 'save work'")
-                return
-    else:
-        print("📦 工作区干净，无需自动提交")
-
-    print()
-
-    # Step 2: Fetch upstream
-    if dry_run:
-        print("📥 [dry-run] 将执行: git fetch upstream")
-    else:
-        print("📥 正在获取 upstream 最新变更...")
-        try:
-            result = subprocess.run(
-                ["git", "fetch", "upstream"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=30
-            )
-            if result.returncode != 0:
-                print(f"   [!] fetch 失败: {result.stderr}")
-                print("   请确保 upstream 远程已配置:")
-                print("   git remote add upstream https://github.com/Panniantong/Agent-Reach.git")
-                return
-            print("   ✅ 已获取 upstream/main 最新状态")
-        except Exception as e:
-            print(f"   [!] fetch 失败: {e}")
-            return
-
-    print()
-
-    # Step 3: Show what will be merged
-    try:
-        result = subprocess.run(
-            ["git", "log", "HEAD..upstream/main", "--oneline"],
-            capture_output=True, encoding="utf-8", errors="replace", timeout=5
-        )
-        new_commits = result.stdout.strip().split("\n") if result.stdout.strip() else []
-        new_commits = [c for c in new_commits if c]
-    except Exception:
-        new_commits = []
-
-    if not new_commits:
-        print("✅ 已经是最新版本，无需更新")
-        return
-
-    print(f"🔄 即将合并 {len(new_commits)} 个新提交:")
-    for commit in new_commits[:10]:  # Show first 10
-        print(f"   • {commit}")
-    if len(new_commits) > 10:
-        print(f"   ... 还有 {len(new_commits) - 10} 个提交")
-
-    print()
-
-    # Step 4: Merge
-    if dry_run:
-        print("🔀 [dry-run] 将执行: git merge upstream/main --no-edit")
-        print()
-        print("📋 总结:")
-        print("   - 自动提交本地更改（如果有）")
-        print("   - 获取 upstream 最新代码")
-        print("   - 合并到当前分支，保留自定义功能")
-        print("   - 由于是 Editable 安装，无需重新 pip install")
-        print()
-        print("   要实际执行，请运行: agent-reach update")
-    else:
-        print("🔀 正在合并 upstream/main...")
-        try:
-            result = subprocess.run(
-                ["git", "merge", "upstream/main", "--no-edit"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=30
-            )
-            if result.returncode != 0:
-                # Check if it's a conflict
-                if "CONFLICT" in result.stdout or "CONFLICT" in result.stderr:
-                    print("   [!] 合并冲突，需要手动解决")
-                    print()
-                    print("   冲突文件:")
-                    # Show conflict status
-                    status_result = subprocess.run(
-                        ["git", "diff", "--name-only", "--diff-filter=U"],
-                        capture_output=True, encoding="utf-8", timeout=5
-                    )
-                    conflict_files = status_result.stdout.strip().split("\n")
-                    conflict_file_list = []
-                    for f in conflict_files:
-                        if f:
-                            print(f"     - {f}")
-                            conflict_file_list.append(f)
-                    print()
-                    print("   ═══════════════════════════════════════════════════════")
-                    print("   解决冲突步骤:")
-                    print("   ═══════════════════════════════════════════════════════")
-                    print()
-                    print("   1️⃣  查看冲突内容:")
-                    print("       git diff                    # 查看所有冲突")
-                    print("       code .                      # 用 VS Code 打开（推荐）")
-                    print()
-                    print("   2️⃣  编辑冲突文件，解决 <<<<<<< HEAD ======= >>>>>>> 标记")
-                    print("       - 保留你的更改: 删除上游部分")
-                    print("       - 保留上游更改: 删除你的部分")
-                    print("       - 合并两者: 手动整合代码")
-                    print()
-                    print("   3️⃣  标记冲突已解决:")
-                    if conflict_file_list:
-                        for f in conflict_file_list[:3]:
-                            print(f"       git add {f}")
-                        if len(conflict_file_list) > 3:
-                            print(f"       # ... 还有 {len(conflict_file_list) - 3} 个文件")
-                    else:
-                        print("       git add <冲突文件>")
-                    print()
-                    print("   4️⃣  完成合并:")
-                    print("       git commit -m 'resolve merge conflicts'")
-                    print()
-                    print("   5️⃣  重新安装 skill:")
-                    print("       agent-reach install")
-                    print()
-                    print("   ───────────────────────────────────────────────────────")
-                    print("   或者取消本次合并（回到更新前状态）:")
-                    print("       git merge --abort")
-                    print("   ═══════════════════════════════════════════════════════")
-                else:
-                    print(f"   [!] 合并失败: {result.stderr}")
-                return
-
-            print("   ✅ 合并成功！")
-            print()
-            print("🎉 更新完成！")
-            print()
-            print("自定义功能状态:")
-            print("   ✅ weibo       - 已保留")
-            print("   ✅ v2ex        - 已保留")
-            print("   ✅ xiaoyuzhou  - 已保留")
-            print()
-            print("提示:")
-            print("   - 代码已更新，立即可用（Editable 模式）")
-            print("   - 运行 agent-reach doctor 检查所有渠道状态")
-
-        except Exception as e:
-            print(f"   [!] 合并失败: {e}")
-            return
 
 
 def _cmd_watch():
@@ -1915,11 +1736,7 @@ def _cmd_watch():
         if release_body:
             for line in release_body.strip().split("\n")[:10]:
                 print(f"    {line}")
-        print()
-        print("  更新方式 (保留自定义功能):")
-        print("    agent-reach update")
-        print("  或 (纯净官方版本):")
-        print("    pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
+        print(f"  更新: pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip")
 
 
 if __name__ == "__main__":
